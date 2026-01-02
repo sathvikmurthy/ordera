@@ -1,0 +1,68 @@
+# Binaries and executables
+priority-gateway
+chaincode/chaincode
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build artifacts
+*.test
+*.out
+/go.work
+
+# Go dependency directories
+vendor/
+
+# Frontend dependencies and build artifacts
+frontend/node_modules/
+frontend/build/
+frontend/.pnp
+frontend/.pnp.js
+frontend/coverage/
+
+# Frontend misc
+frontend/.DS_Store
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# Hyperledger Fabric generated artifacts (from test-network)
+organizations/
+channel-artifacts/
+system-genesis-block/
+*.tar.gz
+*.block
+
+# Wallet files (contain private keys - never commit these!)
+wallets/
+wallet/
+*.id
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files with secrets
+.env.production
+.env.secrets
+
+# Logs
+*.log
+logs/
+
+# Test outputs
+test-results/
+coverage/
