@@ -8,6 +8,8 @@ import (
     "os/signal"
     "syscall"
     "time"
+    
+    "priority-fabric-project/internal"
 )
 
 func main() {
@@ -53,27 +55,27 @@ func main() {
     log.Printf("🔧 Initializing components...")
     
     // Create WebSocket hub
-    wsHub := NewWebSocketHub()
+    wsHub := internal.NewWebSocketHub()
     log.Printf("✅ WebSocket hub initialized")
     
     // Start WebSocket hub in background
     go wsHub.Run()
     
     // Create mempool
-    mempool := NewMempool(*mempoolSize)
+    mempool := internal.NewMempool(*mempoolSize)
     log.Printf("✅ Mempool initialized (max size: %d)", *mempoolSize)
     
     // Initialize Fabric client if requested
-    var fabricClient *FabricClient
+    var fabricClient *internal.FabricClient
     
     if *useFabric {
         log.Printf("🔗 Connecting to Hyperledger Fabric network...")
         
         // Get default configuration for test-network
-        config := DefaultFabricConfig()
+        config := internal.DefaultFabricConfig()
         
         // Find the private key in the keystore directory
-        keyPath, err := GetPrivateKeyPath(config.KeyPath)
+        keyPath, err := internal.GetPrivateKeyPath(config.KeyPath)
         if err != nil {
             log.Printf("⚠️  Warning: Could not find private key: %v", err)
             log.Printf("⚠️  Continuing in simulation mode without Fabric connection")
@@ -81,7 +83,7 @@ func main() {
             config.KeyPath = keyPath
             
             // Create Fabric client
-            fabricClient, err = NewFabricClient(config)
+            fabricClient, err = internal.NewFabricClient(config)
             if err != nil {
                 log.Printf("⚠️  Warning: Failed to connect to Fabric: %v", err)
                 log.Printf("⚠️  Continuing in simulation mode without Fabric connection")
@@ -101,11 +103,11 @@ func main() {
     }
     
     // Create batcher with optional Fabric client and WebSocket hub
-    batcher := NewBatcher(mempool, *batchSize, *batchTimeout, fabricClient, wsHub)
+    batcher := internal.NewBatcher(mempool, *batchSize, *batchTimeout, fabricClient, wsHub)
     log.Printf("✅ Batcher initialized (size: %d, timeout: %v)", *batchSize, *batchTimeout)
     
     // Create gateway with WebSocket hub
-    gateway := NewTransactionGateway(mempool, batcher, wsHub)
+    gateway := internal.NewTransactionGateway(mempool, batcher, wsHub)
     log.Printf("✅ Transaction gateway initialized")
     
     // Start batcher in background

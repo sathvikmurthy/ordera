@@ -33,11 +33,17 @@ print_error() {
     echo -e "${RED}❌ $1${NC}"
 }
 
+# Get the script directory
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 # Check if we're in the right directory
-if [ ! -f "server.go" ]; then
-    print_error "Please run this script from the priority-fabric-project directory"
+if [ ! -f "$PROJECT_ROOT/cmd/server.go" ]; then
+    print_error "Please run this script from the priority-fabric-project/scripts directory"
     exit 1
 fi
+
+cd "$PROJECT_ROOT"
 
 # Parse command line arguments
 DEPLOY_CHAINCODE=false
@@ -121,8 +127,8 @@ fi
 # Step 2: Deploy chaincode if requested
 if [ "$DEPLOY_CHAINCODE" = true ]; then
     print_info "Deploying chaincode to Fabric network..."
-    if [ -f "./deploy-chaincode.sh" ]; then
-        ./deploy-chaincode.sh
+    if [ -f "$SCRIPT_DIR/deploy-chaincode.sh" ]; then
+        "$SCRIPT_DIR/deploy-chaincode.sh"
         if [ $? -eq 0 ]; then
             print_success "Chaincode deployed successfully"
         else
@@ -151,7 +157,7 @@ if [ "$USE_FABRIC" = true ]; then
         print_warning "Fabric network is not running"
         echo ""
         echo "To start the Fabric network, run:"
-        echo "  cd /Users/sathvikcustiv/fabric-dev/fabric-samples/test-network"
+        echo "  cd $PROJECT_ROOT/../fabric-samples/test-network"
         echo "  ./network.sh up createChannel"
         echo ""
         echo "Or run this script with --deploy flag to automatically deploy"
@@ -162,7 +168,8 @@ if [ "$USE_FABRIC" = true ]; then
     
     # Check if chaincode is deployed
     print_info "Checking if chaincode is deployed..."
-    cd /Users/sathvikcustiv/fabric-dev/fabric-samples/test-network
+    FABRIC_TEST_NETWORK="$PROJECT_ROOT/../fabric-samples/test-network"
+    cd "$FABRIC_TEST_NETWORK"
     export PATH=${PWD}/../bin:$PATH
     export FABRIC_CFG_PATH=$PWD/../config/
     export CORE_PEER_TLS_ENABLED=true
@@ -183,12 +190,12 @@ if [ "$USE_FABRIC" = true ]; then
         exit 1
     fi
     
-    cd - >/dev/null
+    cd "$PROJECT_ROOT"
 fi
 
 # Step 4: Build the application
 print_info "Building application..."
-go build -o priority-gateway . >/dev/null 2>&1
+go build -o priority-gateway ./cmd/server.go >/dev/null 2>&1
 if [ $? -eq 0 ]; then
     print_success "Build successful"
 else
@@ -222,7 +229,7 @@ fi
 
 # Print startup info
 echo "================================================"
-echo "🌐 Server will start on: http://localhost:$PORT"
+echo "🌐 Server will start on: http://localhost:${PORT:-8080}"
 echo "📋 Mode: $(if [ "$USE_FABRIC" = true ]; then echo "Fabric Integration"; else echo "Simulation"; fi)"
 echo "================================================"
 echo ""

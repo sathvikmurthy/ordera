@@ -3,13 +3,13 @@ module priority-fabric-project
 go 1.25.3
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	github.com/hyperledger/fabric-gateway v1.10.0
 	google.golang.org/grpc v1.76.0
 	priority-fabric-project/types v0.0.0-00010101000000-000000000000
 )
 
 require (
-	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hyperledger/fabric-protos-go-apiv2 v0.3.7 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect
 	golang.org/x/net v0.42.0 // indirect

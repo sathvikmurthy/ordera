@@ -12,8 +12,12 @@ echo "==========================================="
 CHAINCODE_NAME="wallet"
 CHANNEL_NAME="mychannel"
 
+# Get the script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+
 # Get the path to fabric-samples
-FABRIC_SAMPLES_PATH="/Users/sathvikcustiv/fabric-dev/fabric-samples"
+FABRIC_SAMPLES_PATH="${PROJECT_ROOT}/../fabric-samples"
 TEST_NETWORK_PATH="${FABRIC_SAMPLES_PATH}/test-network"
 
 # Check if test-network exists

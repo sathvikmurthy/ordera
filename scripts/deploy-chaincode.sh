@@ -16,10 +16,11 @@ CHAINCODE_NAME="wallet"
 CHAINCODE_VERSION="1.5"
 CHANNEL_NAME="mychannel"
 CHAINCODE_SEQUENCE=1
-CC_SRC_PATH="${SCRIPT_DIR}/chaincode"
+CC_SRC_PATH="${SCRIPT_DIR}/../chaincode"
 
-# Get the relative path to fabric-samples from the script directory
-FABRIC_SAMPLES_PATH="${SCRIPT_DIR}/../fabric-samples"
+# Get the relative path to fabric-samples from the project root
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/.." && pwd )"
+FABRIC_SAMPLES_PATH="${PROJECT_ROOT}/../fabric-samples"
 TEST_NETWORK_PATH="${FABRIC_SAMPLES_PATH}/test-network"
 
 # Check if test-network exists
