@@ -54,13 +54,6 @@ func main() {
     
     log.Printf("🔧 Initializing components...")
     
-    // Create WebSocket hub
-    wsHub := internal.NewWebSocketHub()
-    log.Printf("✅ WebSocket hub initialized")
-    
-    // Start WebSocket hub in background
-    go wsHub.Run()
-    
     // Create mempool
     mempool := internal.NewMempool(*mempoolSize)
     log.Printf("✅ Mempool initialized (max size: %d)", *mempoolSize)
@@ -102,12 +95,12 @@ func main() {
         log.Printf("ℹ️  Running in simulation mode (use --use-fabric to connect to Fabric network)")
     }
     
-    // Create batcher with optional Fabric client and WebSocket hub
-    batcher := internal.NewBatcher(mempool, *batchSize, *batchTimeout, fabricClient, wsHub)
+    // Create batcher with optional Fabric client
+    batcher := internal.NewBatcher(mempool, *batchSize, *batchTimeout, fabricClient)
     log.Printf("✅ Batcher initialized (size: %d, timeout: %v)", *batchSize, *batchTimeout)
     
-    // Create gateway with WebSocket hub
-    gateway := internal.NewTransactionGateway(mempool, batcher, wsHub)
+    // Create gateway
+    gateway := internal.NewTransactionGateway(mempool, batcher)
     log.Printf("✅ Transaction gateway initialized")
     
     // Start batcher in background

@@ -16,15 +16,13 @@ import (
 type TransactionGateway struct {
     mempool *Mempool
     batcher *Batcher
-    wsHub   *WebSocketHub
 }
 
 // NewTransactionGateway creates a new gateway instance
-func NewTransactionGateway(mempool *Mempool, batcher *Batcher, wsHub *WebSocketHub) *TransactionGateway {
+func NewTransactionGateway(mempool *Mempool, batcher *Batcher) *TransactionGateway {
     return &TransactionGateway{
         mempool: mempool,
         batcher: batcher,
-        wsHub:   wsHub,
     }
 }
 
@@ -51,19 +49,6 @@ func (tg *TransactionGateway) SubmitTransaction(incomingTx types.IncomingTransac
     log.Printf("📥 Transaction queued: %s (%s, priority: %d, from: %s, to: %s, amount: %s)", 
         safeSubstring(txID, 8), incomingTx.TxType, priority, 
         safeSubstring(incomingTx.From, 8), safeSubstring(incomingTx.To, 8), incomingTx.Amount)
-    
-    // Broadcast transaction submitted event
-    if tg.wsHub != nil {
-        tg.wsHub.BroadcastEvent(EventTxSubmitted, map[string]interface{}{
-            "transactionId": txID,
-            "from":          incomingTx.From,
-            "to":            incomingTx.To,
-            "amount":        incomingTx.Amount,
-            "txType":        incomingTx.TxType,
-            "priority":      priority,
-            "status":        "queued",
-        })
-    }
     
     return &types.TransactionResponse{
         TransactionID: txID,
@@ -287,9 +272,6 @@ func (tg *TransactionGateway) StartServer(port string) {
     
     log.Printf("🚀 Priority Transaction Gateway server starting on port %s", port)
     log.Printf("📡 Available endpoints:")
-    if tg.wsHub != nil {
-        log.Printf("   WS   /ws - WebSocket connection for real-time updates")
-    }
     log.Printf("   POST /submit - Submit new transactions")
     log.Printf("   GET  /mempool/status - View mempool statistics")
     log.Printf("   GET  /batcher/status - View batcher status")

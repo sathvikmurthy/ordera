@@ -20,7 +20,6 @@ type Batcher struct {
     batchCount      int
     totalProcessed  int
     completedTxs    []*types.Transaction // Store completed transactions
-    wsHub           *WebSocketHub
     mutex           sync.RWMutex
 }
 
@@ -37,7 +36,7 @@ type FabricBatchProcessor struct {
 }
 
 // NewBatcher creates a new batcher instance
-func NewBatcher(mempool *Mempool, batchSize int, batchTimeout time.Duration, fabricClient *FabricClient, wsHub *WebSocketHub) *Batcher {
+func NewBatcher(mempool *Mempool, batchSize int, batchTimeout time.Duration, fabricClient *FabricClient) *Batcher {
     return &Batcher{
         mempool:      mempool,
         batchSize:    batchSize,
@@ -51,7 +50,6 @@ func NewBatcher(mempool *Mempool, batchSize int, batchTimeout time.Duration, fab
         running:      false,
         batchCount:   0,
         totalProcessed: 0,
-        wsHub:        wsHub,
     }
 }
 
@@ -96,17 +94,6 @@ func (b *Batcher) Start() {
                 if remaining > 0 {
                     log.Printf("⏱️  Waiting for batch... %d transactions queued, %.1fs remaining (or %d more txs needed)",
                         b.mempool.Size(), remaining.Seconds(), b.batchSize-b.mempool.Size())
-                    
-                    // Broadcast countdown event
-                    if b.wsHub != nil {
-                        stats := b.mempool.GetStats()
-                        b.wsHub.BroadcastEvent(EventBatchCountdown, map[string]interface{}{
-                            "remainingSeconds": int(remaining.Seconds()),
-                            "mempoolSize":      b.mempool.Size(),
-                            "batchSize":        b.batchSize,
-                            "mempoolStats":     stats,
-                        })
-                    }
                 }
             }
             
@@ -163,18 +150,6 @@ func (b *Batcher) processBatch(trigger string) {
     log.Printf("🎯 Priority distribution: swap:%d, borrow:%d, lend:%d, transfer:%d", 
         priorityCount[0], priorityCount[1], priorityCount[2], priorityCount[3])
     
-    // Broadcast batch started event
-    if b.wsHub != nil {
-        b.wsHub.BroadcastEvent(EventBatchStarted, map[string]interface{}{
-            "batchNumber":    b.batchCount,
-            "batchSize":      len(batch),
-            "trigger":        trigger,
-            "mode":           batchMode,
-            "useQuotaMode":   useQuotaMode,
-            "priorityCount":  priorityCount,
-        })
-    }
-    
     // Log batch details for debugging
     log.Printf("📦 Batch contents:")
     for i, tx := range batch {
@@ -198,17 +173,6 @@ func (b *Batcher) processBatch(trigger string) {
         
         log.Printf("✅ Successfully processed batch #%d (%d transactions). Total processed: %d", 
             b.batchCount, len(batch), b.totalProcessed)
-        
-        // Broadcast batch completed event
-        if b.wsHub != nil {
-            b.wsHub.BroadcastEvent(EventBatchCompleted, map[string]interface{}{
-                "batchNumber":      b.batchCount,
-                "batchSize":        len(batch),
-                "totalProcessed":   b.totalProcessed,
-                "priorityCount":    priorityCount,
-                "mode":             batchMode,
-            })
-        }
     }
 }
 
