@@ -1,223 +1,105 @@
 package internal
 
 import (
-    "container/heap"
-    "fmt"
-    "sync"
-    
-    "priority-fabric-project/types"
+	"fmt"
+	"sort"
+	"sync"
+	"priority-fabric-project/types"
 )
 
-// Mempool manages pending transactions with priority ordering
 type Mempool struct {
-    transactions *PriorityQueue
-    mutex        sync.RWMutex
-    maxSize      int
-    txMap        map[string]*types.Transaction // For quick lookups by ID
+	// The Drawer System: [0]=Swap, [1]=Borrow, [2]=Lend, [3]=Transfer
+	buckets [4][]*types.Transaction 
+	mutex   sync.RWMutex
+	maxSize int
+	current int 
 }
 
-// NewMempool creates a new mempool instance
 func NewMempool(maxSize int) *Mempool {
-    pq := &PriorityQueue{}
-    heap.Init(pq)
-    
-    return &Mempool{
-        transactions: pq,
-        maxSize:      maxSize,
-        txMap:        make(map[string]*types.Transaction),
-    }
+	return &Mempool{
+		maxSize: maxSize,
+	}
 }
 
-// AddTransaction adds a new transaction to the mempool
 func (m *Mempool) AddTransaction(tx *types.Transaction) error {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
-    
-    // Check if mempool is full
-    if len(m.txMap) >= m.maxSize {
-        return fmt.Errorf("mempool is full (max: %d)", m.maxSize)
-    }
-    
-    // Check if transaction already exists
-    if _, exists := m.txMap[tx.ID]; exists {
-        return fmt.Errorf("transaction %s already exists in mempool", tx.ID)
-    }
-    
-    // Set status to pending if not already set
-    if tx.Status == "" {
-        tx.Status = "pending"
-    }
-    
-    // Add to priority queue and map
-    heap.Push(m.transactions, tx)
-    m.txMap[tx.ID] = tx
-    
-    return nil
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.current >= m.maxSize {
+		return fmt.Errorf("mempool is full")
+	}
+
+	// Transactions are appended, keeping each bucket naturally sorted by time (FIFO)
+	m.buckets[tx.Priority] = append(m.buckets[tx.Priority], tx)
+	m.current++
+	return nil
 }
 
-// GetBatch extracts a batch of transactions using alternating strategies
-// useQuotaMode determines the batching strategy:
-// - false: Pure priority ordering (highest priority first)
-// - true: Quota-based anti-starvation (at least 1 per priority)
-func (m *Mempool) GetBatch(batchSize int, useQuotaMode bool) []*types.Transaction {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
-    
-    if m.transactions.Len() == 0 {
-        return []*types.Transaction{}
-    }
-    
-    if !useQuotaMode {
-        // Standard priority-based batching (ascending priority order)
-        return m.getBatchStandard(batchSize)
-    }
-    
-    // Quota-based anti-starvation batching
-    return m.getBatchQuotaBased(batchSize)
+// GetBatch captures the Window and decides to Sort (Priority) or stay Pure (FIFO)
+func (m *Mempool) GetBatch(batchSize int, useWindowedSort bool) []*types.Transaction {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if m.current == 0 { return nil }
+
+	// Phase 1: Capture the Window (Temporal Selection)
+	// We find the oldest transactions across all buckets up to the batchSize
+	var window []*types.Transaction
+	limit := batchSize
+	if m.current < limit { limit = m.current }
+
+	for len(window) < limit {
+		oldestIdx := -1
+
+		// K-Way Merge: Compare the head of all 4 buckets to find the absolute oldest arrival
+		for p := 0; p < 4; p++ {
+			if len(m.buckets[p]) > 0 {
+				if oldestIdx == -1 || m.buckets[p][0].Timestamp.Before(m.buckets[oldestIdx][0].Timestamp) {
+					oldestIdx = p
+				}
+			}
+		}
+
+		if oldestIdx == -1 { break }
+
+		// Move the transaction from its Bucket to the Window
+		tx := m.buckets[oldestIdx][0]
+		window = append(window, tx)
+		m.buckets[oldestIdx] = m.buckets[oldestIdx][1:]
+		m.current--
+	}
+
+	// Phase 2: Conditional Execution Order
+	if useWindowedSort {
+		// WINDOWED SORT: Priority (0->3) first, then Arrival Time
+		sort.Slice(window, func(i, j int) bool {
+			if window[i].Priority != window[j].Priority {
+				return window[i].Priority < window[j].Priority
+			}
+			return window[i].Timestamp.Before(window[j].Timestamp)
+		})
+	}
+	// Note: If useWindowedSort is false, it remains in Pure FIFO (Arrival Order)
+
+	return window
 }
 
-// getBatchStandard extracts batch using pure priority ordering
-func (m *Mempool) getBatchStandard(batchSize int) []*types.Transaction {
-    var batch []*types.Transaction
-    
-    // Extract up to batchSize transactions in priority order
-    for i := 0; i < batchSize && m.transactions.Len() > 0; i++ {
-        tx := heap.Pop(m.transactions).(*types.Transaction)
-        tx.SetProcessing()
-        batch = append(batch, tx)
-        
-        // Remove from map
-        delete(m.txMap, tx.ID)
-    }
-    
-    return batch
+// Requeue puts failed transactions back at the absolute front of their buckets
+func (m *Mempool) Requeue(txs []*types.Transaction) {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	for _, tx := range txs {
+		tx.Status = "pending"
+		p := tx.Priority
+		// Prepend to ensure seniority in the next available window
+		m.buckets[p] = append([]*types.Transaction{tx}, m.buckets[p]...)
+		m.current++
+	}
 }
 
-// getBatchQuotaBased extracts batch with quota-based anti-starvation
-// Algorithm:
-// 1. Reserve at least 1 slot per priority level (if transactions exist)
-// 2. Fill remaining slots with highest priority transactions
-func (m *Mempool) getBatchQuotaBased(batchSize int) []*types.Transaction {
-    // Group transactions by priority
-    priorityGroups := make(map[int][]*types.Transaction)
-    
-    // Extract all transactions from heap to organize by priority
-    for m.transactions.Len() > 0 {
-        tx := heap.Pop(m.transactions).(*types.Transaction)
-        priorityGroups[tx.Priority] = append(priorityGroups[tx.Priority], tx)
-    }
-    
-    // Build batch with quota-based selection
-    var batch []*types.Transaction
-    slotsRemaining := batchSize
-    
-    // Phase 1: Reserve 1 slot per priority level (anti-starvation)
-    // Process priorities in order: 0, 1, 2, 3
-    for priority := 0; priority <= 3 && slotsRemaining > 0; priority++ {
-        if len(priorityGroups[priority]) > 0 {
-            // Take one transaction from this priority
-            tx := priorityGroups[priority][0]
-            priorityGroups[priority] = priorityGroups[priority][1:]
-            
-            tx.SetProcessing()
-            batch = append(batch, tx)
-            delete(m.txMap, tx.ID)
-            slotsRemaining--
-        }
-    }
-    
-    // Phase 2: Fill remaining slots with highest priority transactions
-    for priority := 0; priority <= 3 && slotsRemaining > 0; priority++ {
-        for len(priorityGroups[priority]) > 0 && slotsRemaining > 0 {
-            tx := priorityGroups[priority][0]
-            priorityGroups[priority] = priorityGroups[priority][1:]
-            
-            tx.SetProcessing()
-            batch = append(batch, tx)
-            delete(m.txMap, tx.ID)
-            slotsRemaining--
-        }
-    }
-    
-    // Put remaining transactions back into the heap
-    for priority := 0; priority <= 3; priority++ {
-        for _, tx := range priorityGroups[priority] {
-            heap.Push(m.transactions, tx)
-        }
-    }
-    
-    return batch
-}
-
-// GetStats returns current mempool statistics
-func (m *Mempool) GetStats() types.MempoolStats {
-    m.mutex.RLock()
-    defer m.mutex.RUnlock()
-    
-    stats := types.MempoolStats{
-        TotalTransactions: len(m.txMap),
-        MaxSize:           m.maxSize,
-        ByPriority:        make(map[int]int),
-        PendingTxs:        make([]*types.Transaction, 0, len(m.txMap)),
-    }
-    
-    // Count by priority and collect transactions
-    for _, tx := range m.txMap {
-        stats.ByPriority[tx.Priority]++
-        stats.PendingTxs = append(stats.PendingTxs, tx)
-    }
-    
-    return stats
-}
-
-// Size returns current number of transactions in mempool
 func (m *Mempool) Size() int {
-    m.mutex.RLock()
-    defer m.mutex.RUnlock()
-    return len(m.txMap)
-}
-
-// GetTransaction retrieves a specific transaction by ID
-func (m *Mempool) GetTransaction(txID string) (*types.Transaction, bool) {
-    m.mutex.RLock()
-    defer m.mutex.RUnlock()
-    
-    tx, exists := m.txMap[txID]
-    return tx, exists
-}
-
-// RemoveTransaction removes a transaction from mempool (for failed transactions)
-func (m *Mempool) RemoveTransaction(txID string) bool {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
-    
-    if _, exists := m.txMap[txID]; exists {
-        delete(m.txMap, txID)
-        return true
-    }
-    return false
-}
-
-// Clear empties the mempool
-func (m *Mempool) Clear() {
-    m.mutex.Lock()
-    defer m.mutex.Unlock()
-    
-    m.transactions = &PriorityQueue{}
-    heap.Init(m.transactions)
-    m.txMap = make(map[string]*types.Transaction)
-}
-
-// GetPendingTransactionsByPriority returns transactions grouped by priority
-func (m *Mempool) GetPendingTransactionsByPriority() map[int][]*types.Transaction {
-    m.mutex.RLock()
-    defer m.mutex.RUnlock()
-    
-    priorityMap := make(map[int][]*types.Transaction)
-    
-    for _, tx := range m.txMap {
-        priorityMap[tx.Priority] = append(priorityMap[tx.Priority], tx)
-    }
-    
-    return priorityMap
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	return m.current
 }
