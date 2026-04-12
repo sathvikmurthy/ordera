@@ -13,5 +13,6 @@ type TransactionResponse struct {
     TransactionID string `json:"transactionId"`
     Status        string `json:"status"`
     Priority      int    `json:"priority"`
+    GasFee        string `json:"gasFee"`
     Message       string `json:"message"`
 }

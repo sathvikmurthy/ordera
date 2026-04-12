@@ -36,19 +36,24 @@ func (tg *TransactionGateway) SubmitTransaction(incomingTx types.IncomingTransac
 	}
 	
 	tx := types.NewTransaction(txID, incomingTx.From, incomingTx.To, incomingTx.Amount, incomingTx.TxType, priority)
-	
+
+	gasFee := CalculateGasFee(incomingTx.TxType, tg.mempool.Utilization())
+	tx.GasFee = fmt.Sprintf("%.6f", gasFee)
+	GasFeeGauge.WithLabelValues(incomingTx.TxType).Set(gasFee)
+
 	err := tg.mempool.AddTransaction(tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add transaction to mempool: %v", err)
 	}
-	
-	log.Printf("📥 Transaction queued: %s (%s, priority: %d)", 
-		safeSubstring(txID, 8), incomingTx.TxType, priority)
-	
+
+	log.Printf("📥 Transaction queued: %s (%s, priority: %d, gasFee: %s)",
+		safeSubstring(txID, 8), incomingTx.TxType, priority, tx.GasFee)
+
 	return &types.TransactionResponse{
 		TransactionID: txID,
 		Status:        "queued",
 		Priority:      priority,
+		GasFee:        tx.GasFee,
 		Message:       fmt.Sprintf("Transaction queued with priority %d", priority),
 	}, nil
 }

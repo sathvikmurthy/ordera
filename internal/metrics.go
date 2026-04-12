@@ -24,4 +24,10 @@ var (
 		Help:    "Time taken to merge buckets and sort the window",
 		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1}, // Millisecond precision
 	}, []string{"mode"})
+
+	// 4. Gas Fee Gauge (labeled by transaction type)
+	GasFeeGauge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gateway_gas_fee",
+		Help: "Most recently calculated dynamic gas fee by transaction type",
+	}, []string{"tx_type"})
 )

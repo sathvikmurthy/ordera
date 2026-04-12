@@ -99,3 +99,13 @@ func (m *Mempool) Size() int {
 	defer m.mutex.RUnlock()
 	return m.current
 }
+
+// Utilization returns the fraction of maxSize currently used, in range [0.0, 1.0].
+func (m *Mempool) Utilization() float64 {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+	if m.maxSize == 0 {
+		return 0
+	}
+	return float64(m.current) / float64(m.maxSize)
+}
