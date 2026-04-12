@@ -13,9 +13,9 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 # Configuration
 CHAINCODE_NAME="wallet"
-CHAINCODE_VERSION="1.5"
+CHAINCODE_VERSION="1.6"
 CHANNEL_NAME="mychannel"
-CHAINCODE_SEQUENCE=1
+CHAINCODE_SEQUENCE=2
 CC_SRC_PATH="${SCRIPT_DIR}/../chaincode"
 
 # Get the relative path to fabric-samples from the project root

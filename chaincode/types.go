@@ -36,17 +36,16 @@ type Transaction struct {
 }
 
 // NewTransactionRecord creates a transaction record for chaincode
-func NewTransactionRecord(txID, from, to, amount, txType string, priority int, timestamp string) Transaction {
-	// Parse the provided timestamp string to create a time.Time object
-	// This ensures determinism across all peers
+func NewTransactionRecord(txID, from, to, amount, txType, gasFee string, priority int, timestamp string) Transaction {
 	var parsedTime time.Time
 	if timestamp != "" {
 		parsedTime, _ = time.Parse(time.RFC3339, timestamp)
 	} else {
-		// If no timestamp provided, use Unix epoch (should not happen in practice)
 		parsedTime = time.Unix(0, 0)
 	}
-
+	if gasFee == "" {
+		gasFee = "0.001"
+	}
 	return Transaction{
 		ID:        txID,
 		TxID:      txID,
@@ -59,7 +58,7 @@ func NewTransactionRecord(txID, from, to, amount, txType string, priority int, t
 		Timestamp: parsedTime,
 		Time:      timestamp,
 		Status:    "completed",
-		GasFee:    "0.001",
+		GasFee:    gasFee,
 	}
 }
 

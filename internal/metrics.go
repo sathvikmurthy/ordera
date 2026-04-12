@@ -30,4 +30,10 @@ var (
 		Name: "gateway_gas_fee",
 		Help: "Most recently calculated dynamic gas fee by transaction type",
 	}, []string{"tx_type"})
+
+	// 5. Treasury Balance — cumulative gas fees collected since gateway start
+	TreasuryCollected = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "gateway_treasury_collected_total",
+		Help: "Total gas fees collected by the network treasury since gateway start",
+	})
 )

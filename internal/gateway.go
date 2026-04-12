@@ -40,6 +40,7 @@ func (tg *TransactionGateway) SubmitTransaction(incomingTx types.IncomingTransac
 	gasFee := CalculateGasFee(incomingTx.TxType, tg.mempool.Utilization())
 	tx.GasFee = fmt.Sprintf("%.6f", gasFee)
 	GasFeeGauge.WithLabelValues(incomingTx.TxType).Set(gasFee)
+	TreasuryCollected.Add(gasFee)
 
 	err := tg.mempool.AddTransaction(tx)
 	if err != nil {

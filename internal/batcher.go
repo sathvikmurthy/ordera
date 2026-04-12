@@ -25,7 +25,7 @@ func (f *FabricBatchProcessor) ProcessBatch(batch []*types.Transaction) error {
 	
 	// Convert batch to the format required by your chaincode [cite: 1]
 	for _, tx := range batch {
-		_, err := f.fabricClient.SubmitTransaction("Transact", tx.From, tx.To, tx.Amount, tx.TxType)
+		_, err := f.fabricClient.SubmitTransaction("Transact", tx.From, tx.To, tx.Amount, tx.TxType, tx.GasFee)
 		if err != nil {
 			return err
 		}
