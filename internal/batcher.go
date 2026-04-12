@@ -85,52 +85,49 @@ func (b *Batcher) Start() {
 	}
 }
 
-// processBatch handles the core logic of capturing the window and sorting
+// processBatch builds a block via WFQ and submits it to Fabric.
+// Every block uses the same weighted fair queueing algorithm — no mode alternation.
 func (b *Batcher) processBatch(trigger string) {
 	b.batchCount++
-	
-	// Logic to alternate modes: Odd blocks use Windowed Sort, Even use Pure FIFO
-	useWindowedSort := (b.batchCount % 2) != 0
-	mode := "pure_fifo"
-	if useWindowedSort {
-		mode = "windowed_sort"
-	}
 
-	// ⏱️ Start Timer for Prometheus
+	const mode = "wfq"
+
 	start := time.Now()
-
-	// Capture the window from the bucket system
-	batch := b.mempool.GetBatch(b.batchSize, useWindowedSort)
-	
-	// Record the internal processing duration (merge + sort)
+	batch := b.mempool.GetBatch(b.batchSize)
 	BlockCreationLatency.WithLabelValues(mode).Observe(time.Since(start).Seconds())
 
 	if len(batch) == 0 {
 		return
 	}
 
-	modeLabel := "PURE FIFO"
-	if useWindowedSort {
-		modeLabel = "WINDOWED SORT"
+	// Count per-type composition of this block (for quota validation in Grafana)
+	composition := map[string]int{}
+	for _, tx := range batch {
+		composition[tx.TxType]++
 	}
-	
-	log.Printf("⚡ Block #%d [%s] Trigger: %s, Size: %d", b.batchCount, modeLabel, trigger, len(batch))
 
-	// Attempt to process the batch through the Fabric Client
+	log.Printf("⚡ Block #%d [WFQ] Trigger: %s, Size: %d, Composition: %v",
+		b.batchCount, trigger, len(batch), composition)
+
 	err := b.processor.ProcessBatch(batch)
 	if err != nil {
 		log.Printf("❌ Block #%d failed (MVCC/Network): %v. Re-queuing...", b.batchCount, err)
-		b.mempool.Requeue(batch) // Preserve seniority at the front of buckets
-	} else {
-		b.mutex.Lock()
-		b.totalProcessed += len(batch)
-		b.mutex.Unlock()
-
-		// 📊 Increment throughput counter for Grafana
-		TxProcessed.WithLabelValues(mode).Add(float64(len(batch)))
-
-		log.Printf("✅ Block #%d committed. Total processed: %d", b.batchCount, b.totalProcessed)
+		b.mempool.Requeue(batch)
+		return
 	}
+
+	b.mutex.Lock()
+	b.totalProcessed += len(batch)
+	b.mutex.Unlock()
+
+	TxProcessed.WithLabelValues(mode).Add(float64(len(batch)))
+	commitTime := time.Now()
+	for _, tx := range batch {
+		BlockComposition.WithLabelValues(tx.TxType).Inc()
+		E2ELatency.WithLabelValues(tx.TxType).Observe(commitTime.Sub(tx.Timestamp).Seconds())
+	}
+
+	log.Printf("✅ Block #%d committed. Total processed: %d", b.batchCount, b.totalProcessed)
 }
 
 func (b *Batcher) Stop() {
