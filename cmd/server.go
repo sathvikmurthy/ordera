@@ -23,7 +23,6 @@ func main() {
 		batchSize    = flag.Int("batch-size", 6, "Window Size (Block Size)")
 		batchTimeout = flag.Duration("batch-timeout", 10*time.Second, "Max wait time before cutting a block")
 		mempoolSize  = flag.Int("mempool-size", 1000, "Maximum transactions in the bucket system")
-		verbose      = flag.Bool("verbose", true, "Enable detailed logging of window merges")
 		useFabric    = flag.Bool("use-fabric", false, "Connect to Hyperledger Fabric")
 	)
 	flag.Parse()

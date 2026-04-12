@@ -103,7 +103,7 @@ func (b *Batcher) processBatch(trigger string) {
 	batch := b.mempool.GetBatch(b.batchSize, useWindowedSort)
 	
 	// Record the internal processing duration (merge + sort)
-	BlockCreationDuration.WithLabelValues(mode).Observe(time.Since(start).Seconds())
+	BlockCreationLatency.WithLabelValues(mode).Observe(time.Since(start).Seconds())
 
 	if len(batch) == 0 {
 		return
