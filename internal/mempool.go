@@ -3,6 +3,7 @@ package internal
 import (
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -91,6 +92,18 @@ func (m *Mempool) GetBatch(batchSize int) []*types.Transaction {
 		m.buckets[highest] = m.buckets[highest][1:]
 		m.current--
 	}
+
+	// Phase 3 — Intra-Block Priority Sort (stable).
+	// Guarantees strict priority order within the committed block so that no
+	// lower-priority transaction is submitted to Fabric before a higher-priority
+	// one in the same block. FIFO ordering within a priority class is preserved
+	// via the stable sort falling back to arrival timestamp.
+	sort.SliceStable(block, func(i, j int) bool {
+		if block[i].Priority != block[j].Priority {
+			return block[i].Priority < block[j].Priority
+		}
+		return block[i].Timestamp.Before(block[j].Timestamp)
+	})
 
 	// Record gateway-side wait time (submit → extraction) for each extracted tx
 	now := time.Now()

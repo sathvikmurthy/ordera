@@ -1,9 +1,12 @@
 package internal
 
 import (
+	"fmt"
 	"log"
+	"sort"
 	"sync"
 	"time"
+
 	"priority-fabric-project/types"
 )
 
@@ -122,9 +125,33 @@ func (b *Batcher) processBatch(trigger string) {
 
 	TxProcessed.WithLabelValues(mode).Add(float64(len(batch)))
 	commitTime := time.Now()
-	for _, tx := range batch {
+
+	// Snapshot the last committed block — COMMITTED ORDER (after Phase 3 sort)
+	LastBlockSlot.Reset()
+	for i, tx := range batch {
 		BlockComposition.WithLabelValues(tx.TxType).Inc()
 		E2ELatency.WithLabelValues(tx.TxType).Observe(commitTime.Sub(tx.Timestamp).Seconds())
+		BlockPosition.WithLabelValues(tx.TxType).Observe(float64(i + 1))
+
+		LastBlockSlot.WithLabelValues(
+			fmt.Sprintf("%02d", i+1),
+			tx.TxType,
+		).Set(float64(tx.Priority))
+	}
+
+	// Snapshot the SAME block in ARRIVAL ORDER (sorted by submit timestamp).
+	// This is the "before" image for the before/after comparison in Grafana.
+	arrivalOrder := make([]*types.Transaction, len(batch))
+	copy(arrivalOrder, batch)
+	sort.SliceStable(arrivalOrder, func(i, j int) bool {
+		return arrivalOrder[i].Timestamp.Before(arrivalOrder[j].Timestamp)
+	})
+	LastBlockArrivalSlot.Reset()
+	for i, tx := range arrivalOrder {
+		LastBlockArrivalSlot.WithLabelValues(
+			fmt.Sprintf("%02d", i+1),
+			tx.TxType,
+		).Set(float64(tx.Priority))
 	}
 
 	log.Printf("✅ Block #%d committed. Total processed: %d", b.batchCount, b.totalProcessed)

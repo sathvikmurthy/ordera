@@ -56,4 +56,30 @@ var (
 		Help:    "Gateway wait time from submit to extraction from mempool, by transaction type",
 		Buckets: prometheus.ExponentialBuckets(0.001, 2, 16),
 	}, []string{"tx_type"})
+
+	// 9. Block Position — where each tx ends up within its committed block.
+	// After the Phase 3 priority sort, swap should always land at low positions
+	// and transfer at high positions. Use _sum/_count for avg, histogram_quantile
+	// for p50/p95/p99 position per tx type.
+	BlockPosition = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "gateway_tx_block_position",
+		Help:    "Position of transaction within its committed block (1 = first, N = last), by type",
+		Buckets: prometheus.LinearBuckets(1, 1, 30),
+	}, []string{"tx_type"})
+
+	// 10. Last Block Slot (COMMITTED ORDER) — snapshot of the most recently
+	// committed block in the order transactions were submitted to Fabric (i.e.
+	// after WFQ + Phase 3 priority sort).
+	LastBlockSlot = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gateway_last_block_slot",
+		Help: "Most recently committed block in committed (priority-sorted) order",
+	}, []string{"position", "tx_type"})
+
+	// 11. Last Block Arrival Slot (ARRIVAL ORDER) — same block as LastBlockSlot,
+	// but reordered by arrival timestamp. Used side-by-side with LastBlockSlot in
+	// Grafana to visualize the before/after of WFQ + priority sort.
+	LastBlockArrivalSlot = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "gateway_last_block_arrival_slot",
+		Help: "Most recently committed block in arrival-timestamp order (pre-sort input)",
+	}, []string{"position", "tx_type"})
 )
